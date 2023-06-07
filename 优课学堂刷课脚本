@@ -1,0 +1,350 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+# @Author  : 577812056
+# @Email   : 577812056@qq.com
+# @File    : dhlg_class.py
+# @Software: PyCharm
+# @Time    : 2023/5/18 13:59
+
+import sys
+
+sys.path.append('../')
+
+import warnings
+
+warnings.filterwarnings("ignore")
+import datetime
+import json
+import os
+import random
+import time
+
+import filetype
+from config import default_config
+from requests_html import HTMLSession
+from selenium.webdriver.common.by import By
+# selenium获取浏览器请求
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+# Selenium-wire模块介绍
+from seleniumwire import webdriver
+from selenium.webdriver import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+# 键盘输入
+from selenium.webdriver.common.keys import Keys
+
+from utils.inforobot import robot_msg_send
+
+ca = DesiredCapabilities.CHROME
+# 用来打开多个标签
+js = "window.open('{}','_blank');"
+session = HTMLSession()
+# 防检测代码
+chromeOptions = webdriver.ChromeOptions()
+# 加载插件
+chromeOptions.add_argument(
+    "load-extension=C:/Users/QLZN/AppData/Local/Google/Chrome/User Data/Default/Extensions/jpbjcnkcffbooppibceonlgknpkniiff/2.9.995_0")
+# 以开发者模式启动浏览器,去除受控制提示
+chromeOptions.add_experimental_option('excludeSwitches', ['enable-automation'])
+# 禁用图片
+# chromeOptions.add_argument('blink-settings=imagesEnabled=false')
+# 添加沙盒模式
+chromeOptions.add_argument('--no-sandbox')
+chromeOptions.add_argument('--disable-dev-shm-usage')
+# 不用打开图形界面
+# chromeOptions.add_argument("--remote-debugging-port=9222")  # this
+# chromeOptions.add_argument('--headless')
+# chromeOptions.add_argument('--disable-gpu')
+# chromeOptions.add_argument("--window-size=1920,1080")  # 专门应对无头浏览器中不能最大化屏幕的方案
+# chromeOptions.add_argument(
+#     'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36')
+# 屏蔽以开发者运行提示框
+chromeOptions.add_experimental_option('useAutomationExtension', False)
+# 忽略链接不安全页面提示的方法
+chromeOptions.add_argument('ignore-certificate-errors')
+
+driver = webdriver.Chrome(options=chromeOptions)
+driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+    "source": """
+                                    Object.defineProperty(navigator, 'webdriver', {
+                                      get: () => undefined
+                                    })
+                                  """
+})
+
+
+def open_web(token_data):
+    driver.maximize_window()
+
+    driver.get("https://dhlg.youkexuetang.cn/student")
+    time.sleep(2)
+
+    cookies_1 = {
+        "domain": "dhlg.youkexuetang.cn",
+        "expirationDate": 1718936884.169626,
+        "hostOnly": True,
+        "httpOnly": False,
+        "name": "p_h5_u",
+        "path": "/student",
+        "sameSite": "None",
+        "secure": True,
+        "session": False,
+        "storeId": "0",
+        "value": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+        "id": 1
+    }
+
+    cookies_2 = {
+        "domain": "dhlg.youkexuetang.cn",
+        "expirationDate": 1715912884,
+        "hostOnly": True,
+        "httpOnly": False,
+        "name": "selectedStreamLevel",
+        "path": "/student",
+        "sameSite": "None",
+        "secure": False,
+        "session": False,
+        "storeId": "0",
+        "value": "FD",
+        "id": 2
+    }
+
+    token_dist = {
+        # 自行f12获取token字段
+    }
+
+    # cookie与token注入
+    driver.delete_all_cookies()
+    driver.add_cookie(cookies_1)
+    driver.add_cookie(cookies_2)
+
+    # 写入token
+    for key, value in token_dist.items():
+        driver.execute_script(f'sessionStorage.setItem("{key}", "{value}")')
+    driver.execute_script(f'sessionStorage.setItem("token", "{token_data}")')
+
+    # rob_store_url = "https://dhlg.youkexuetang.cn/student"
+    # 进入更多页面 - 获取所有学期的课程
+    # rob_store_url = "https://dhlg.youkexuetang.cn/student/#/courseList/courseList"
+    # driver.execute_script(js.format(rob_store_url))
+    # driver.get(rob_store_url)
+    # driver.close()
+    # driver.switch_to.window(driver.window_handles[-1])
+    driver.refresh()
+    print("我刷新了页面~~~~")
+    time.sleep(5)
+
+
+def get_all_class():
+    try:
+        # 进入更多
+        many = driver.find_elements(By.XPATH, "//span[contains(text(),'更多')]")
+        many = many[1]
+        driver.execute_script("arguments[0].click()", many)
+    except Exception:
+        driver.refresh()
+        time.sleep(5)
+        # 进入更多
+        many = driver.find_elements(By.XPATH, "//span[contains(text(),'更多')]")
+        many = many[1]
+        driver.execute_script("arguments[0].click()", many)
+
+    # 获取所有课程与进度
+    time.sleep(5)
+    class_all = []
+    class_list = []
+
+    # 获取所有课程
+    class_all_elements = driver.find_elements(By.CLASS_NAME, "courseItem")
+    for i in class_all_elements:
+        class_all.append(i.text.replace("\n", ','))
+
+    # 课程数据清洗
+    for cl in class_all:
+        new_cl = cl.split(",")
+        data_dist = {
+            "课程名称": new_cl[1],
+            "课程进度": new_cl[2],
+            "课程状态": new_cl[3],
+        }
+        class_list.append(data_dist)
+
+    print("所有课程：", class_list)
+    # 进入课程
+    look_class(class_list)
+
+
+def look_class(class_list):
+    # 遍历所有课程 判断进度不为100%的进入学习
+    for look in reversed(class_list):
+        jd = look["课程进度"]
+        if jd != "100%":
+            print("======= 判断到以下课程需要观看 =============")
+            print("当前课程：", look["课程名称"])
+            print("当前进度：", look["课程进度"])
+            print("当前状态：", look["课程状态"])
+            print("========================================")
+            sn = 0
+            while sn < 20:
+                # 进入课程
+                try:
+                    # # 滚动到窗口底部
+                    # driver.execute_script("window.scrollBy(0,document.body.scrollHeight)")
+                    # time.sleep(2)
+
+                    class_name = driver.find_element(By.XPATH, f"//p[contains(text(),'{look['课程名称']}')]")
+                    driver.execute_script("arguments[0].click()", class_name)
+
+                    # 点击学习
+                    time.sleep(2)
+                    WebDriverWait(driver, 10, 0.5).until(EC.presence_of_element_located(
+                        (By.ID, 'tab-study'))).click()
+                    sn = 100
+                except Exception as e:
+                    print("页面似乎没有加载完成，刷新一下~~")
+                    driver.refresh()
+                    time.sleep(5)
+                    sn += 1
+
+            # 获取课程章节
+            time.sleep(2)
+            chapter_list = get_class_chapter()
+
+            # 遍历章节 获取章节下的所有视频数据
+            get_class_mp4(chapter_list)
+
+            # 遍历章节进行学习
+
+            time.sleep(15)
+
+
+def get_class_chapter():
+    # 获取课程章节
+    data_list = []
+    data_all = driver.find_elements(By.CLASS_NAME, 'el-collapse-item')
+    for i in data_all:
+        data_list.append(i.text)
+
+    print("课程所有章节：", data_list)
+    return data_list
+
+
+def get_class_mp4(chapter_list):
+    """
+    传入所有章节列表,获取章节下的所有视频数据
+    :param chapter_list:
+    :return:
+    """
+    # 遍历章节进行学习
+    mp4_list = []
+    for i in chapter_list:
+        try:
+            # 点击章节
+            element = driver.find_element(By.XPATH, f"//*[contains(text(),'{i}')]")
+            driver.execute_script("arguments[0].click()", element)
+        except Exception:
+            # 点击章节
+            element = driver.find_element(By.XPATH, f"//*[contains(text(),'{i.split(' ')[-1]}')]")
+            driver.execute_script("arguments[0].click()", element)
+        time.sleep(1)
+
+        # 获取该章节下的所有视频信息
+        mp4_list.clear()
+        mp4_data_all = driver.find_elements(By.CLASS_NAME, 'content_box')
+        for j in mp4_data_all:
+            if j.text != '':
+                mp4_list.append(j.text)
+
+        # 清洗视频数据
+        for k in mp4_list:
+            if "100%" not in k:
+                new_mp4_list = k.replace("\n", ",").replace(" ", ",").split(",")
+                print("本章节下所有视频：", mp4_list)
+                print("需要观看的视频：", new_mp4_list)
+
+                try:
+                    # 点击需要观看的视频
+                    click_mp4 = new_mp4_list[-3]
+                    if "导学" in new_mp4_list:
+                        click_mp4 = new_mp4_list[-2]
+                    WebDriverWait(driver, 10, 0.5).until(
+                        EC.presence_of_element_located(
+                            (By.XPATH, f"//*[contains(text(),'{click_mp4}')]"))).click()
+                    time.sleep(12)
+                except Exception:
+                    # 点击需要观看的视频
+                    if len(new_mp4_list) > 3:
+                        print("元素不可交互，可能存在多个相同名称，更换元素点击视频,当前点击元素~  ", new_mp4_list[0])
+                        mp4_el = driver.find_element(By.XPATH, f"//*[contains(text(),'{new_mp4_list[0]}')]")
+                        driver.execute_script("arguments[0].click()", mp4_el)
+                        time.sleep(12)
+                    else:
+                        print("元素不可交互，可能存在多个相同名称，更换元素点击视频,当前点击元素~  ", new_mp4_list[-2])
+                        mp4_el = driver.find_element(By.XPATH, f"//*[contains(text(),'{new_mp4_list[-2]}')]")
+                        driver.execute_script("arguments[0].click()", mp4_el)
+                        time.sleep(12)
+
+                # 点击播放按钮
+                WebDriverWait(driver, 100, 5).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "outter"))).click()
+
+                # 观看视频中
+                # 循环获取视频进度
+                for mp4_time in range(10000000000000):
+                    time.sleep(15)
+                    mp4_time_data = ""
+                    mp4_time_data_em = driver.find_elements(By.CLASS_NAME, "prism-time-display")
+                    for mp4_time_da in mp4_time_data_em:
+                        mp4_time_data = mp4_time_da.text
+
+                    mp4_time_list = mp4_time_data.replace(" / ", ",").replace(" ", "").split(",")
+                    last_time = split_time(mp4_time_list[0])
+                    over_time = split_time(mp4_time_list[1])
+                    print("当前视频进度：", mp4_time_data)
+                    if str(mp4_time_list[0]) == str(mp4_time_list[1]) \
+                            or last_time > over_time or over_time - last_time < 2:
+                        # 课程观看完成 跳出循环
+                        print("*****课程观看完成*****：", new_mp4_list)
+                        break
+
+            # 判断是否是最后一个视频观看完成
+            if i == chapter_list[-1] and k == mp4_list[-1]:
+                print("====================章节最后一个视频观看完成====================")
+                # 回到首页
+                # driver.get("https://dhlg.youkexuetang.cn/student/#/index")
+                driver.get("https://dhlg.youkexuetang.cn/student/#/courseList/courseList")
+                driver.refresh()
+                time.sleep(5)
+                driver.refresh()
+                time.sleep(10)
+
+
+def split_time(time_str=None):
+    line = time_str.split(":")
+    seconds = int(line[0]) * 60 + int(line[1])
+    # seconds = int(line[0]) * 3600 + int(line[1]) * 60 + int(line[2])
+    return seconds
+
+
+def close_browser():
+    time.sleep(10000)
+    driver.quit()
+
+
+if __name__ == '__main__':
+    # 自行获取自己token
+    token_data = '替换成自己的token'
+    open_web(token_data)
+    get_all_class()
+    close_browser()
+
+# token 注入：
+# token = self.driver.execute_script('return sessionStorage.getItem("token")')
+# 获取token的值，运用js写法，必须加 return 才有返回，不然都是None，进行注入
+# elf.driver.execute_script('sessionStorage.setItem("auth", "%s")'%(token))
+
+# cookies 注入：
+# cookies=self.driver.get_cookies()
+# 获取cookies的值，进行注入
+# self.driver.add_cookie({'name': '...', 'value': '...'})
+# cookies 是以key 和value 的形式
